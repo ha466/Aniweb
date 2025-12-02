@@ -3,44 +3,717 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>The Fool's Playlist</title>
+    <title>Gesture Controlled 3D Particles v2</title>
     
-    <!-- 1. Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- 2. Import Map (Fixes "import ... from 'react'" errors) -->
-    <!-- This tells the browser where to get the libraries used in your rm.jsx file -->
-    <script type="importmap">
-    {
-      "imports": {
-        "react": "https://esm.sh/react@18.2.0",
-        "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
-        "lucide-react": "https://esm.sh/lucide-react@0.263.1"
-      }
-    }
-    </script>
+    <!-- MediaPipe Dependencies -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
 
-    <!-- 3. Babel for translating JSX in the browser -->
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-</head>
-<body class="bg-stone-950 text-stone-300">
-    
-    <!-- The Container where React will render -->
-    <div id="root"></div>
+    <style>
+        :root {
+            --primary: #00f2ff;
+            --accent: #ff0055;
+            --bg-glass: rgba(15, 23, 42, 0.75);
+            --border-glass: rgba(255, 255, 255, 0.15);
+        }
 
-    <!-- 4. The Loader Script -->
-    <!-- We use type="text/babel" and data-type="module" to handle imports -->
-    <script type="text/babel" data-type="module">
-        import React from 'react';
-        import { createRoot } from 'react-dom/client';
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #050505;
+            background: radial-gradient(circle at center, #1a1a2e 0%, #000000 100%);
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            color: white;
+        }
+
+        #canvas-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 1;
+        }
+
+        /* UI Overlay */
+        #ui-layer {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            pointer-events: none;
+        }
+
+        .panel {
+            background: var(--bg-glass);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--border-glass);
+            padding: 20px;
+            border-radius: 16px;
+            width: 280px;
+            pointer-events: auto;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+            transition: all 0.3s ease;
+        }
+
+        .panel:hover {
+            transform: translateY(-2px);
+            border-color: rgba(255, 255, 255, 0.3);
+            box-shadow: 0 12px 40px rgba(0, 242, 255, 0.1);
+        }
+
+        h2 {
+            margin: 0 0 15px 0;
+            font-size: 1.1rem;
+            font-weight: 700;
+            letter-spacing: 1px;
+            color: var(--primary);
+            text-transform: uppercase;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            padding-bottom: 10px;
+        }
+
+        /* Controls */
+        .control-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            font-size: 0.8rem;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #ccc;
+            letter-spacing: 0.5px;
+        }
+
+        select, input[type="color"] {
+            width: 100%;
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid #555;
+            color: white;
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            outline: none;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        select:hover, input[type="color"]:hover {
+            border-color: var(--primary);
+            background: rgba(0, 0, 0, 0.6);
+        }
+
+        input[type="color"] {
+            height: 40px;
+            padding: 4px;
+        }
+
+        /* Custom Checkbox */
+        .checkbox-wrapper {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+            cursor: pointer;
+        }
         
-        // Import your component from the local file
-        // NOTE: Ensure the file name matches exactly (case sensitive)
-        import LordOfMysteriesPlayer from './rm.jsx';
+        .checkbox-wrapper input {
+            display: none;
+        }
 
-        const root = createRoot(document.getElementById('root'));
-        root.render(<LordOfMysteriesPlayer />);
+        .checkmark {
+            width: 18px;
+            height: 18px;
+            border: 2px solid #555;
+            border-radius: 4px;
+            margin-right: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+
+        .checkbox-wrapper input:checked + .checkmark {
+            background: var(--primary);
+            border-color: var(--primary);
+        }
+
+        .checkbox-wrapper input:checked + .checkmark::after {
+            content: '✔';
+            font-size: 12px;
+            color: black;
+        }
+        
+        .checkbox-label {
+            font-size: 0.9rem;
+            color: #ddd;
+        }
+
+        /* Webcam Preview */
+        .cam-preview {
+            width: 100%;
+            height: 160px;
+            background: #000;
+            border-radius: 8px;
+            overflow: hidden;
+            position: relative;
+            transform: scaleX(-1);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        #input_video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            opacity: 0.6;
+        }
+
+        /* Status Indicators */
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            font-size: 0.75rem;
+            margin-top: 10px;
+            background: rgba(0,0,0,0.3);
+            padding: 6px 12px;
+            border-radius: 20px;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .dot {
+            width: 8px;
+            height: 8px;
+            background: #444;
+            border-radius: 50%;
+            margin-right: 8px;
+            transition: background 0.3s;
+        }
+
+        .dot.active {
+            background: var(--primary);
+            box-shadow: 0 0 10px var(--primary);
+        }
+
+        .value-display {
+            font-family: 'Courier New', monospace;
+            color: var(--primary);
+            float: right;
+            font-weight: bold;
+        }
+
+        /* Loading Screen */
+        #loader {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: #000;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 0.5s;
+        }
+
+        .spinner {
+            width: 60px;
+            height: 60px;
+            border: 3px solid rgba(255,255,255,0.1);
+            border-radius: 50%;
+            border-top-color: var(--primary);
+            border-right-color: var(--accent);
+            animation: spin 1s linear infinite;
+            margin-bottom: 25px;
+        }
+
+        button#start-btn {
+            background: linear-gradient(45deg, var(--primary), #00aaff);
+            color: #000;
+            border: none;
+            padding: 14px 35px;
+            font-size: 1.1rem;
+            font-weight: 800;
+            border-radius: 30px;
+            cursor: pointer;
+            box-shadow: 0 0 25px rgba(0, 242, 255, 0.4);
+            transition: all 0.2s;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        button#start-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 40px rgba(0, 242, 255, 0.6);
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        @media (max-width: 600px) {
+            .panel { width: calc(100vw - 80px); }
+            #ui-layer { top: 10px; left: 10px; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Loading / Start Screen -->
+    <div id="loader">
+        <div class="spinner"></div>
+        <h1 style="margin-bottom: 10px; font-weight: 300; letter-spacing: 2px;">NEURAL PARTICLES <span style="font-size: 0.5em; color: var(--primary); vertical-align: super;">V2</span></h1>
+        <p style="color: #888; max-width: 320px; text-align: center; margin-bottom: 40px; font-size: 0.9rem; line-height: 1.5;">
+            Track your hand gestures to manipulate the quantum field. <br>
+            <span style="color: #555;">(Camera access required)</span>
+        </p>
+        <button id="start-btn">Initialize System</button>
+    </div>
+
+    <!-- UI Overlay -->
+    <div id="ui-layer">
+        <!-- Controls Panel -->
+        <div class="panel">
+            <h2>System Control</h2>
+            
+            <div class="control-group">
+                <label>Simulation Template</label>
+                <select id="template-selector">
+                    <option value="saturn">Saturn Rings</option>
+                    <option value="dna">DNA Helix (New)</option>
+                    <option value="fireworks">Quantum Fireworks</option>
+                    <option value="vortex">Hyper Vortex</option>
+                    <option value="cloud">Nebula Cloud</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label>Particle Frequency</label>
+                <input type="color" id="color-picker" value="#00f2ff">
+            </div>
+
+            <div class="control-group">
+                <label>Interaction Modes</label>
+                
+                <label class="checkbox-wrapper">
+                    <input type="checkbox" id="rotate-toggle">
+                    <div class="checkmark"></div>
+                    <span class="checkbox-label">Hand Position Rotation</span>
+                </label>
+
+                <label class="checkbox-wrapper">
+                    <input type="checkbox" id="pulse-toggle">
+                    <div class="checkmark"></div>
+                    <span class="checkbox-label">Auto-Pulse (Relax Mode)</span>
+                </label>
+            </div>
+
+            <div class="control-group">
+                <div class="status-badge">
+                    <div class="dot" id="hand-dot"></div>
+                    <span id="hand-status">Searching...</span>
+                </div>
+                <div style="margin-top:12px; font-size: 0.8rem; color:#888;">
+                    Expansion: <span id="expansion-val" class="value-display">0%</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Camera Preview Panel -->
+        <div class="panel" style="width: 200px;">
+            <label>Sensor Feed</label>
+            <div class="cam-preview">
+                <video id="input_video" playsinline></video>
+            </div>
+            <p style="font-size: 0.7rem; color: #666; margin-top: 8px; text-align: center;">
+                Open Hand = Expand<br>Closed Fist = Compress
+            </p>
+        </div>
+    </div>
+
+    <!-- 3D Canvas -->
+    <div id="canvas-container"></div>
+
+    <!-- Application Logic -->
+    <script type="module">
+        import * as THREE from 'https://cdn.skypack.dev/three@0.136.0';
+        import { OrbitControls } from 'https://cdn.skypack.dev/three@0.136.0/examples/jsm/controls/OrbitControls.js';
+
+        // --- GLOBAL STATE ---
+        const state = {
+            handDetected: false,
+            tension: 0, // 0 = Open (Relaxed), 1 = Closed (Tense)
+            handCentroid: { x: 0.5, y: 0.5 }, // Normalized 0-1
+            expansionFactor: 1.0, 
+            targetColor: new THREE.Color('#00f2ff'),
+            template: 'saturn',
+            enableRotation: false,
+            autoPulse: false
+        };
+
+        // --- THREE.JS SETUP ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x050505, 0.002);
+
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.z = 30;
+        camera.position.y = 10;
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        container.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.autoRotate = true;
+        controls.autoRotateSpeed = 1.0;
+        controls.enableZoom = true;
+
+        // --- PARTICLE SYSTEM ---
+        const PARTICLE_COUNT = 18000;
+        const geometry = new THREE.BufferGeometry();
+        const basePositions = new Float32Array(PARTICLE_COUNT * 3);
+        const currentPositions = new Float32Array(PARTICLE_COUNT * 3);
+        const sizes = new Float32Array(PARTICLE_COUNT); // Variable sizes
+        
+        function createGlowTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 64;
+            canvas.height = 64;
+            const context = canvas.getContext('2d');
+            const gradient = context.createRadialGradient(32, 32, 0, 32, 32, 32);
+            gradient.addColorStop(0, 'rgba(255,255,255,1)');
+            gradient.addColorStop(0.15, 'rgba(255,255,255,0.9)');
+            gradient.addColorStop(0.4, 'rgba(255,255,255,0.2)');
+            gradient.addColorStop(1, 'rgba(0,0,0,0)');
+            context.fillStyle = gradient;
+            context.fillRect(0, 0, 64, 64);
+            return new THREE.Texture(canvas);
+        }
+        
+        const glowTex = createGlowTexture();
+        glowTex.needsUpdate = true;
+
+        const material = new THREE.PointsMaterial({
+            size: 0.6,
+            map: glowTex,
+            transparent: true,
+            opacity: 0.8,
+            vertexColors: false,
+            color: state.targetColor,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false,
+            sizeAttenuation: true
+        });
+
+        const particles = new THREE.Points(geometry, material);
+        scene.add(particles);
+
+        // --- TEMPLATE GENERATORS ---
+        function setTemplate(name) {
+            state.template = name;
+            const positions = basePositions;
+            
+            for (let i = 0; i < PARTICLE_COUNT; i++) {
+                const i3 = i * 3;
+                let x, y, z;
+                
+                // Varied sizes for depth
+                sizes[i] = Math.random() * 0.8 + 0.2;
+
+                if (name === 'saturn') {
+                    if (Math.random() > 0.3) {
+                        // Ring
+                        const angle = Math.random() * Math.PI * 2;
+                        const radius = 12 + Math.random() * 18;
+                        x = Math.cos(angle) * radius;
+                        z = Math.sin(angle) * radius;
+                        y = (Math.random() - 0.5) * 1.0; 
+                    } else {
+                        // Planet
+                        const r = 9 * Math.cbrt(Math.random());
+                        const theta = Math.random() * Math.PI * 2;
+                        const phi = Math.acos(2 * Math.random() - 1);
+                        x = r * Math.sin(phi) * Math.cos(theta);
+                        y = r * Math.sin(phi) * Math.sin(theta);
+                        z = r * Math.cos(phi);
+                    }
+                }
+                else if (name === 'dna') {
+                    // Double Helix
+                    const turns = 4;
+                    const len = 45;
+                    const radius = 5;
+                    
+                    const t = (i / PARTICLE_COUNT) * Math.PI * 2 * turns;
+                    const h = ((i / PARTICLE_COUNT) - 0.5) * len;
+                    
+                    // 50% split for strands + random noise "rungs"
+                    const isStrand1 = Math.random() > 0.5;
+                    const offset = isStrand1 ? 0 : Math.PI;
+                    
+                    // Add noise to make it look like a cloud, not a line
+                    const noise = 1.2;
+                    
+                    x = (radius + (Math.random()-0.5)*noise) * Math.cos(t + offset);
+                    z = (radius + (Math.random()-0.5)*noise) * Math.sin(t + offset);
+                    y = h + (Math.random()-0.5)*noise;
+
+                    // DNA Rungs (connections)
+                    if (Math.random() > 0.95) {
+                        const rungT = Math.random() * Math.PI * 2 * turns;
+                        const rungH = (rungT / (Math.PI * 2 * turns) - 0.5) * len;
+                        const rungPos = (Math.random() * 2 - 1) * radius; // Linear interpolate across
+                        x = rungPos * Math.cos(rungT);
+                        z = rungPos * Math.sin(rungT);
+                        y = rungH;
+                    }
+                }
+                else if (name === 'fireworks') {
+                    const r = Math.random() * 45;
+                    const theta = Math.random() * Math.PI * 2;
+                    const phi = Math.acos(2 * Math.random() - 1);
+                    const noise = Math.random() * 3;
+                    x = (r + noise) * Math.sin(phi) * Math.cos(theta);
+                    y = (r + noise) * Math.sin(phi) * Math.sin(theta);
+                    z = (r + noise) * Math.cos(phi);
+                }
+                else if (name === 'vortex') {
+                    const angle = i * 0.05;
+                    const radius = 4 + Math.random() * 12;
+                    const depth = (i % 100) - 50; 
+                    x = Math.cos(angle) * radius;
+                    y = Math.sin(angle) * radius;
+                    z = depth * 1.5 + (Math.random() * 5);
+                }
+                else { // Cloud
+                    x = (Math.random() - 0.5) * 60;
+                    y = (Math.random() - 0.5) * 60;
+                    z = (Math.random() - 0.5) * 60;
+                }
+
+                positions[i3] = x;
+                positions[i3 + 1] = y;
+                positions[i3 + 2] = z;
+            }
+            
+            // Re-apply current pos from base
+            geometry.setAttribute('position', new THREE.BufferAttribute(currentPositions, 3));
+            geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+        }
+
+        // Initialize default
+        setTemplate('saturn');
+
+        // --- ANIMATION LOOP ---
+        const clock = new THREE.Clock();
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const time = clock.getElapsedTime();
+            
+            controls.update();
+
+            // --- INTERACTION LOGIC ---
+            let targetScale = 1.0;
+
+            if (state.autoPulse) {
+                // Ignore hand tension for scale, use sine wave
+                targetScale = 1.2 + Math.sin(time * 2) * 0.5; // Pulse between 0.7 and 1.7
+                controls.autoRotate = true; // Force auto rotate in relax mode
+            } 
+            else if (state.handDetected) {
+                // Map tension (0..1) to Scale
+                // Open (0) -> Large (1.8)
+                // Closed (1) -> Small (0.1)
+                targetScale = 1.8 - (state.tension * 1.7);
+                
+                // Hand Rotation Control
+                if (state.enableRotation) {
+                    controls.autoRotate = false; // Disable auto rotate to let user control
+                    
+                    // Map hand 0..1 to rotation angles
+                    // X (Left/Right) controls Rotation Y
+                    // Y (Up/Down) controls Rotation X
+                    const targetRotY = (state.handCentroid.x - 0.5) * -5; // Range -2.5 to 2.5 rad
+                    const targetRotX = (state.handCentroid.y - 0.5) * 5;
+
+                    // Smooth Lerp
+                    particles.rotation.y += (targetRotY - particles.rotation.y) * 0.08;
+                    particles.rotation.x += (targetRotX - particles.rotation.x) * 0.08;
+                } else {
+                    controls.autoRotate = true;
+                    // Slowly return mesh to neutral if rotation disabled
+                    particles.rotation.x *= 0.95;
+                    particles.rotation.z *= 0.95;
+                }
+            }
+
+            // Smooth interpolation of expansion
+            state.expansionFactor += (targetScale - state.expansionFactor) * 0.08;
+            document.getElementById('expansion-val').innerText = Math.round(state.expansionFactor * 100) + '%';
+
+            // --- PARTICLE UPDATE ---
+            const pos = geometry.attributes.position.array;
+            
+            for (let i = 0; i < PARTICLE_COUNT; i++) {
+                const i3 = i * 3;
+                
+                let bx = basePositions[i3];
+                let by = basePositions[i3 + 1];
+                let bz = basePositions[i3 + 2];
+
+                // Template-specific animations
+                if (state.template === 'fireworks') {
+                    by -= 0.05 * Math.sin(time * 0.5 + i); 
+                } else if (state.template === 'vortex') {
+                    bz += 0.3;
+                    if(bz > 60) bz = -60;
+                    // Fake infinite loop
+                    bz = basePositions[i3 + 2] + (time * 5 % 100) - 50; 
+                } else if (state.template === 'dna') {
+                    // Twist the DNA slightly over time
+                    const twist = time * 0.2;
+                    const oldX = bx;
+                    const oldZ = bz;
+                    // Simple Y-axis rotation matrix
+                    bx = oldX * Math.cos(twist) - oldZ * Math.sin(twist);
+                    bz = oldX * Math.sin(twist) + oldZ * Math.cos(twist);
+                }
+
+                // Apply Expansion
+                pos[i3] = bx * state.expansionFactor;
+                pos[i3+1] = by * state.expansionFactor;
+                pos[i3+2] = bz * state.expansionFactor;
+
+                // Breathing/Noise
+                pos[i3] += Math.sin(time * 1.5 + bx * 0.1) * 0.15;
+                pos[i3+1] += Math.cos(time * 1.2 + by * 0.1) * 0.15;
+            }
+
+            geometry.attributes.position.needsUpdate = true;
+            
+            // Color Update
+            material.color.lerp(state.targetColor, 0.05);
+
+            renderer.render(scene, camera);
+        }
+
+        animate();
+
+        // --- HANDLERS ---
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        document.getElementById('template-selector').addEventListener('change', (e) => {
+            setTemplate(e.target.value);
+            state.expansionFactor = 0.1; // Visual pop effect
+        });
+
+        document.getElementById('color-picker').addEventListener('input', (e) => {
+            state.targetColor.set(e.target.value);
+        });
+
+        document.getElementById('rotate-toggle').addEventListener('change', (e) => {
+            state.enableRotation = e.target.checked;
+        });
+
+        document.getElementById('pulse-toggle').addEventListener('change', (e) => {
+            state.autoPulse = e.target.checked;
+        });
+
+        // --- MEDIAPIPE LOGIC ---
+        const videoElement = document.getElementById('input_video');
+        const statusDot = document.getElementById('hand-dot');
+        const statusText = document.getElementById('hand-status');
+
+        function onResults(results) {
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                state.handDetected = true;
+                statusDot.classList.add('active');
+                statusText.innerText = "Tracking Hand";
+                statusText.style.color = state.targetColor.getStyle(); // Sync text color
+
+                const landmarks = results.multiHandLandmarks[0];
+                
+                // 1. Calculate Centroid (for rotation)
+                let cx = 0, cy = 0;
+                landmarks.forEach(l => { cx += l.x; cy += l.y; });
+                state.handCentroid = { x: cx / 21, y: cy / 21 };
+
+                // 2. Calculate Tension (Open vs Closed)
+                const wrist = landmarks[0];
+                const fingers = [8, 12, 16, 20]; 
+                let totalDist = 0;
+                const dist = (p1, p2) => Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2));
+                const palmSize = dist(wrist, landmarks[5]);
+
+                fingers.forEach(idx => {
+                    totalDist += dist(wrist, landmarks[idx]);
+                });
+                
+                const avgDist = totalDist / 4;
+                const ratio = avgDist / palmSize; // >2.2 Open, <1.0 Closed
+
+                let rawTension = 1 - ((ratio - 0.8) / (2.2 - 0.8));
+                if (rawTension < 0) rawTension = 0;
+                if (rawTension > 1) rawTension = 1;
+
+                state.tension = rawTension;
+
+            } else {
+                state.handDetected = false;
+                statusDot.classList.remove('active');
+                statusText.innerText = "Searching...";
+                statusText.style.color = "#aaa";
+                state.tension = 0;
+            }
+        }
+
+        const hands = new Hands({locateFile: (file) => {
+            return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+        }});
+
+        hands.setOptions({
+            maxNumHands: 1,
+            modelComplexity: 1,
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.5
+        });
+
+        hands.onResults(onResults);
+
+        // --- STARTUP ---
+        document.getElementById('start-btn').addEventListener('click', () => {
+            const cameraUtils = new Camera(videoElement, {
+                onFrame: async () => {
+                    await hands.send({image: videoElement});
+                },
+                width: 320,
+                height: 240
+            });
+            
+            cameraUtils.start()
+                .then(() => {
+                    const loader = document.getElementById('loader');
+                    loader.style.opacity = '0';
+                    setTimeout(() => { loader.style.display = 'none'; }, 500);
+                })
+                .catch(err => {
+                    alert("Camera failed to start: " + err);
+                });
+        });
+
     </script>
-
 </body>
 </html>
