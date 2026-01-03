@@ -1,718 +1,969 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gesture Controlled 3D Particles v2</title>
+    <title>Health Care Lab Manager</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chart.js for Analytics -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
-    <!-- MediaPipe Dependencies -->
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
-
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        dark: {
+                            950: '#0a0a0a',
+                            900: '#121212',
+                            800: '#1e1e1e',
+                            700: '#2d2d2d',
+                            600: '#3d3d3d',
+                        },
+                        brand: {
+                            500: '#3b82f6', // Blue
+                            600: '#2563eb',
+                            accent: '#8b5cf6' // Violet
+                        }
+                    },
+                    animation: {
+                        'fade-in': 'fadeIn 0.3s ease-out',
+                        'slide-up': 'slideUp 0.4s ease-out',
+                        'pulse-soft': 'pulseSoft 2s infinite',
+                    },
+                    keyframes: {
+                        fadeIn: {
+                            '0%': { opacity: '0' },
+                            '100%': { opacity: '1' },
+                        },
+                        slideUp: {
+                            '0%': { transform: 'translateY(10px)', opacity: '0' },
+                            '100%': { transform: 'translateY(0)', opacity: '1' },
+                        },
+                        pulseSoft: {
+                            '0%, 100%': { opacity: '1' },
+                            '50%': { opacity: '0.8' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
     <style>
-        :root {
-            --primary: #00f2ff;
-            --accent: #ff0055;
-            --bg-glass: rgba(15, 23, 42, 0.75);
-            --border-glass: rgba(255, 255, 255, 0.15);
-        }
-
         body {
+            /* Deep, modern dark background with subtle gradient */
+            background: radial-gradient(circle at top right, #1e293b, #0f172a 40%, #020617);
+            color: #e5e7eb;
+            font-family: 'Inter', sans-serif;
+            min-height: 100vh;
+        }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #4b5563; 
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #6b7280; 
+        }
+        /* Glassmorphism */
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        input, select {
+            background-color: rgba(0, 0, 0, 0.3) !important;
+            border-color: #4b5563 !important;
+            color: #fff !important;
+        }
+        input:focus {
+            border-color: #3b82f6 !important;
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+        }
+        /* Remove arrows from number input */
+        input::-webkit-outer-spin-button,
+        input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
             margin: 0;
-            overflow: hidden;
-            background-color: #050505;
-            background: radial-gradient(circle at center, #1a1a2e 0%, #000000 100%);
-            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-            color: white;
         }
-
-        #canvas-container {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
-            z-index: 1;
-        }
-
-        /* UI Overlay */
-        #ui-layer {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            z-index: 10;
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-            pointer-events: none;
-        }
-
-        .panel {
-            background: var(--bg-glass);
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
-            border: 1px solid var(--border-glass);
-            padding: 20px;
-            border-radius: 16px;
-            width: 280px;
-            pointer-events: auto;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-            transition: all 0.3s ease;
-        }
-
-        .panel:hover {
-            transform: translateY(-2px);
-            border-color: rgba(255, 255, 255, 0.3);
-            box-shadow: 0 12px 40px rgba(0, 242, 255, 0.1);
-        }
-
-        h2 {
-            margin: 0 0 15px 0;
-            font-size: 1.1rem;
-            font-weight: 700;
-            letter-spacing: 1px;
-            color: var(--primary);
-            text-transform: uppercase;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
-            padding-bottom: 10px;
-        }
-
-        /* Controls */
-        .control-group {
-            margin-bottom: 15px;
-        }
-
-        label {
-            display: block;
-            font-size: 0.8rem;
-            font-weight: 600;
-            margin-bottom: 8px;
-            color: #ccc;
-            letter-spacing: 0.5px;
-        }
-
-        select, input[type="color"] {
-            width: 100%;
-            background: rgba(0, 0, 0, 0.4);
-            border: 1px solid #555;
-            color: white;
-            padding: 10px;
-            border-radius: 8px;
-            font-size: 0.95rem;
-            outline: none;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        select:hover, input[type="color"]:hover {
-            border-color: var(--primary);
-            background: rgba(0, 0, 0, 0.6);
-        }
-
-        input[type="color"] {
-            height: 40px;
-            padding: 4px;
-        }
-
-        /* Custom Checkbox */
-        .checkbox-wrapper {
-            display: flex;
-            align-items: center;
-            margin-bottom: 10px;
-            cursor: pointer;
-        }
-        
-        .checkbox-wrapper input {
-            display: none;
-        }
-
-        .checkmark {
-            width: 18px;
-            height: 18px;
-            border: 2px solid #555;
-            border-radius: 4px;
-            margin-right: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.2s;
-        }
-
-        .checkbox-wrapper input:checked + .checkmark {
-            background: var(--primary);
-            border-color: var(--primary);
-        }
-
-        .checkbox-wrapper input:checked + .checkmark::after {
-            content: '✔';
-            font-size: 12px;
-            color: black;
-        }
-        
-        .checkbox-label {
-            font-size: 0.9rem;
-            color: #ddd;
-        }
-
-        /* Webcam Preview */
-        .cam-preview {
-            width: 100%;
-            height: 160px;
-            background: #000;
-            border-radius: 8px;
-            overflow: hidden;
-            position: relative;
-            transform: scaleX(-1);
-            border: 1px solid rgba(255,255,255,0.1);
-        }
-
-        #input_video {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            opacity: 0.6;
-        }
-
-        /* Status Indicators */
-        .status-badge {
-            display: inline-flex;
-            align-items: center;
-            font-size: 0.75rem;
-            margin-top: 10px;
-            background: rgba(0,0,0,0.3);
-            padding: 6px 12px;
-            border-radius: 20px;
-            border: 1px solid rgba(255,255,255,0.05);
-        }
-
-        .dot {
-            width: 8px;
-            height: 8px;
-            background: #444;
-            border-radius: 50%;
-            margin-right: 8px;
-            transition: background 0.3s;
-        }
-
-        .dot.active {
-            background: var(--primary);
-            box-shadow: 0 0 10px var(--primary);
-        }
-
-        .value-display {
-            font-family: 'Courier New', monospace;
-            color: var(--primary);
-            float: right;
-            font-weight: bold;
-        }
-
-        /* Loading Screen */
-        #loader {
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: #000;
-            z-index: 100;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            transition: opacity 0.5s;
-        }
-
-        .spinner {
-            width: 60px;
-            height: 60px;
-            border: 3px solid rgba(255,255,255,0.1);
-            border-radius: 50%;
-            border-top-color: var(--primary);
-            border-right-color: var(--accent);
-            animation: spin 1s linear infinite;
-            margin-bottom: 25px;
-        }
-
-        button#start-btn {
-            background: linear-gradient(45deg, var(--primary), #00aaff);
-            color: #000;
-            border: none;
-            padding: 14px 35px;
-            font-size: 1.1rem;
-            font-weight: 800;
-            border-radius: 30px;
-            cursor: pointer;
-            box-shadow: 0 0 25px rgba(0, 242, 255, 0.4);
-            transition: all 0.2s;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-
-        button#start-btn:hover {
-            transform: scale(1.05);
-            box-shadow: 0 0 40px rgba(0, 242, 255, 0.6);
-        }
-
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-
-        @media (max-width: 600px) {
-            .panel { width: calc(100vw - 80px); }
-            #ui-layer { top: 10px; left: 10px; }
+        input[type=number] {
+            -moz-appearance: textfield;
         }
     </style>
 </head>
-<body>
+<body class="flex flex-col">
 
-    <!-- Loading / Start Screen -->
-    <div id="loader">
-        <div class="spinner"></div>
-        <h1 style="margin-bottom: 10px; font-weight: 300; letter-spacing: 2px;">NEURAL PARTICLES <span style="font-size: 0.5em; color: var(--primary); vertical-align: super;">V2</span></h1>
-        <p style="color: #888; max-width: 320px; text-align: center; margin-bottom: 40px; font-size: 0.9rem; line-height: 1.5;">
-            Track your hand gestures to manipulate the quantum field. <br>
-            <span style="color: #555;">(Camera access required)</span>
-        </p>
-        <button id="start-btn">Initialize System</button>
-    </div>
+    <!-- Auth Section (Login Screen) -->
+    <div id="auth-container" class="flex-grow flex items-center justify-center p-4 hidden animate-fade-in">
+        <div class="glass-panel p-8 rounded-2xl shadow-2xl max-w-md w-full text-center relative overflow-hidden">
+            <!-- Decorative blur blob -->
+            <div class="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-32 bg-blue-500/20 rounded-full blur-3xl -z-10"></div>
 
-    <!-- UI Overlay -->
-    <div id="ui-layer">
-        <!-- Controls Panel -->
-        <div class="panel">
-            <h2>System Control</h2>
+            <div class="mb-6 text-brand-500 inline-block p-4 rounded-full bg-brand-500/10">
+                <i class="fa-solid fa-flask-vial text-5xl"></i>
+            </div>
+            <h1 class="text-4xl font-bold mb-2 text-white tracking-tight">Health Care</h1>
+            <p class="text-gray-400 mb-8 font-light">Lab Management & Accounting</p>
             
-            <div class="control-group">
-                <label>Simulation Template</label>
-                <select id="template-selector">
-                    <option value="saturn">Saturn Rings</option>
-                    <option value="dna">DNA Helix (New)</option>
-                    <option value="fireworks">Quantum Fireworks</option>
-                    <option value="vortex">Hyper Vortex</option>
-                    <option value="cloud">Nebula Cloud</option>
-                </select>
-            </div>
-
-            <div class="control-group">
-                <label>Particle Frequency</label>
-                <input type="color" id="color-picker" value="#00f2ff">
-            </div>
-
-            <div class="control-group">
-                <label>Interaction Modes</label>
-                
-                <label class="checkbox-wrapper">
-                    <input type="checkbox" id="rotate-toggle">
-                    <div class="checkmark"></div>
-                    <span class="checkbox-label">Hand Position Rotation</span>
-                </label>
-
-                <label class="checkbox-wrapper">
-                    <input type="checkbox" id="pulse-toggle">
-                    <div class="checkmark"></div>
-                    <span class="checkbox-label">Auto-Pulse (Relax Mode)</span>
-                </label>
-            </div>
-
-            <div class="control-group">
-                <div class="status-badge">
-                    <div class="dot" id="hand-dot"></div>
-                    <span id="hand-status">Searching...</span>
-                </div>
-                <div style="margin-top:12px; font-size: 0.8rem; color:#888;">
-                    Expansion: <span id="expansion-val" class="value-display">0%</span>
-                </div>
-            </div>
-        </div>
-
-        <!-- Camera Preview Panel -->
-        <div class="panel" style="width: 200px;">
-            <label>Sensor Feed</label>
-            <div class="cam-preview">
-                <video id="input_video" playsinline></video>
-            </div>
-            <p style="font-size: 0.7rem; color: #666; margin-top: 8px; text-align: center;">
-                Open Hand = Expand<br>Closed Fist = Compress
-            </p>
+            <button id="google-login-btn" class="w-full bg-white text-gray-900 font-bold py-3.5 px-4 rounded-xl hover:bg-gray-100 transition duration-200 flex items-center justify-center gap-3 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5">
+                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" class="w-6 h-6" alt="Google">
+                Sign in with Google
+            </button>
+            <p id="auth-error" class="text-red-400 text-sm mt-4 hidden"></p>
         </div>
     </div>
 
-    <!-- 3D Canvas -->
-    <div id="canvas-container"></div>
+    <!-- App Section (Dashboard) -->
+    <div id="app-container" class="flex-grow flex flex-col hidden animate-fade-in">
+        
+        <!-- Header -->
+        <header class="glass-panel sticky top-0 z-50 shadow-lg border-b-0 border-b-white/5">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div class="bg-blue-600/20 p-2 rounded-lg">
+                        <i class="fa-solid fa-heart-pulse text-blue-400 text-xl"></i>
+                    </div>
+                    <span class="text-xl font-bold tracking-tight text-white hidden sm:block">Health Care <span class="font-light text-gray-400">Manager</span></span>
+                </div>
+                <div class="flex items-center gap-3">
+                    <button id="export-btn" class="text-gray-400 hover:text-white px-3 py-2 rounded-lg text-sm transition flex items-center gap-2 hover:bg-white/5" title="Export to CSV">
+                        <i class="fa-solid fa-file-csv text-lg"></i> <span class="hidden sm:inline">Export</span>
+                    </button>
+                    <div class="h-6 w-px bg-gray-700 mx-1"></div>
+                    <div class="text-right hidden sm:block">
+                        <div id="user-greeting" class="text-xs text-gray-400">Welcome,</div>
+                        <div id="user-email" class="text-xs font-semibold text-white truncate max-w-[150px]"></div>
+                    </div>
+                    <button id="logout-btn" class="bg-red-500/10 hover:bg-red-500/20 text-red-400 p-2 rounded-lg text-sm transition" title="Logout">
+                        <i class="fa-solid fa-power-off"></i>
+                    </button>
+                </div>
+            </div>
+        </header>
 
-    <!-- Application Logic -->
+        <!-- Main Content -->
+        <main class="flex-grow p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full grid grid-cols-1 lg:grid-cols-12 gap-6">
+            
+            <!-- Left Column: Entry Form -->
+            <div class="lg:col-span-7 space-y-6">
+                <div class="glass-panel rounded-2xl p-6 shadow-xl relative overflow-hidden border-t-4 border-t-blue-500">
+                     <!-- Form Header with Date Nav -->
+                    <div class="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
+                        <h2 class="text-lg font-bold text-white flex items-center gap-3">
+                            <span class="bg-blue-500/20 p-2 rounded-lg text-blue-400"><i class="fa-regular fa-pen-to-square"></i></span>
+                            <span id="form-title">Daily Entry</span>
+                        </h2>
+                        
+                        <div class="flex items-center bg-black/30 rounded-lg p-1 border border-gray-700 shadow-inner">
+                            <button id="prev-day-btn" class="p-2 hover:text-blue-400 transition text-gray-400 w-10"><i class="fa-solid fa-chevron-left"></i></button>
+                            <input type="date" id="entry-date" class="bg-transparent border-none text-center text-sm focus:ring-0 w-32 cursor-pointer font-mono font-bold text-white">
+                            <button id="next-day-btn" class="p-2 hover:text-blue-400 transition text-gray-400 w-10"><i class="fa-solid fa-chevron-right"></i></button>
+                        </div>
+                    </div>
+
+                    <form id="daily-form" class="space-y-6">
+                        
+                        <!-- Opening Balance + Patients Row -->
+                        <div class="grid grid-cols-1 sm:grid-cols-12 gap-4">
+                            <!-- Opening Balance -->
+                            <div class="sm:col-span-6 bg-yellow-500/5 p-3 rounded-xl border border-yellow-500/20">
+                                <label class="block text-xs font-medium text-yellow-500/80 mb-1">Opening Balance (From Prev. Day)</label>
+                                <div class="relative group">
+                                    <span class="absolute left-3 top-2.5 text-gray-500"><i class="fa-solid fa-coins"></i></span>
+                                    <input type="number" id="opening-balance" min="0" placeholder="0" class="w-full pl-10 pr-3 py-2.5 rounded-lg border border-gray-600 focus:outline-none focus:border-yellow-500 transition-colors bg-dark-700 text-white font-mono">
+                                </div>
+                            </div>
+
+                            <!-- Patients -->
+                            <div class="sm:col-span-6 p-3">
+                                <label class="block text-xs font-medium text-gray-400 mb-1">Total Patients</label>
+                                <div class="relative group">
+                                    <span class="absolute left-3 top-2.5 text-gray-500 group-focus-within:text-blue-500 transition"><i class="fa-solid fa-users"></i></span>
+                                    <input type="number" id="total-patients" min="0" placeholder="0" class="w-full pl-10 pr-3 py-2.5 rounded-lg border border-gray-600 focus:outline-none focus:border-blue-500 transition-colors bg-dark-700 text-lg">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Financials Section -->
+                        <div class="bg-dark-800/50 p-4 rounded-xl border border-gray-700/50">
+                            <div class="flex justify-between items-end mb-2">
+                                <label class="text-xs font-bold text-gray-300 uppercase tracking-wider">Today's Income Breakdown</label>
+                                <div id="split-status" class="text-[10px] font-mono transition-all"></div>
+                            </div>
+                            
+                            <div class="grid grid-cols-2 gap-3 mb-3">
+                                <div class="col-span-2">
+                                    <div class="relative group">
+                                        <span class="absolute left-3 top-3 text-gray-500 group-focus-within:text-green-500 transition"><i class="fa-solid fa-indian-rupee-sign"></i></span>
+                                        <input type="number" id="total-income" min="0" placeholder="Total Income Today" class="w-full pl-10 pr-3 py-2.5 rounded-xl border border-gray-600 focus:outline-none focus:border-green-500 transition-colors bg-dark-700 font-bold text-white text-lg">
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] text-gray-500 mb-1">Cash</label>
+                                    <input type="number" id="split-cash" min="0" placeholder="0" class="w-full px-3 py-2 rounded-lg border border-gray-600 bg-dark-700 text-sm focus:border-blue-400">
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] text-gray-500 mb-1">Online / GPay</label>
+                                    <input type="number" id="split-gpay" min="0" placeholder="0" class="w-full px-3 py-2 rounded-lg border border-gray-600 bg-dark-700 text-sm focus:border-blue-400">
+                                </div>
+                            </div>
+                            
+                            <!-- Balance Bar -->
+                            <div class="h-1.5 w-full bg-gray-700 rounded-full overflow-hidden flex">
+                                <div id="bar-cash" class="h-full bg-blue-500 transition-all duration-300" style="width: 0%"></div>
+                                <div id="bar-online" class="h-full bg-purple-500 transition-all duration-300" style="width: 0%"></div>
+                                <div id="bar-gap" class="h-full bg-red-500/50 transition-all duration-300" style="width: 100%"></div>
+                            </div>
+                            <div class="flex justify-between text-[10px] text-gray-500 mt-1">
+                                <span class="flex items-center gap-1"><div class="w-2 h-2 rounded-full bg-blue-500"></div> Cash</span>
+                                <span class="flex items-center gap-1"><div class="w-2 h-2 rounded-full bg-purple-500"></div> Online</span>
+                                <span class="flex items-center gap-1"><div class="w-2 h-2 rounded-full bg-red-500/50"></div> Missing</span>
+                            </div>
+                        </div>
+
+                        <!-- Expenses -->
+                        <div class="bg-dark-800/30 p-4 rounded-xl border border-gray-700/30">
+                            <div class="flex justify-between items-center mb-3">
+                                <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider">Daily Expenses</label>
+                                <button type="button" id="add-expense-btn" class="text-xs bg-dark-600 hover:bg-dark-500 text-blue-300 px-3 py-1.5 rounded-lg transition border border-gray-600 flex items-center gap-1">
+                                    <i class="fa-solid fa-plus"></i> Add
+                                </button>
+                            </div>
+                            <div id="expenses-list" class="space-y-2 max-h-52 overflow-y-auto pr-1 custom-scrollbar">
+                                <!-- Dynamic Expense Rows -->
+                            </div>
+                            <div class="mt-3 flex justify-between items-center text-sm border-t border-gray-700 pt-3">
+                                <span class="text-gray-400 text-xs">Total Expenses</span>
+                                <span id="total-expenses-display" class="text-red-400 font-mono font-bold">0.00</span>
+                            </div>
+                        </div>
+
+                        <!-- Net Deposit Highlight Card -->
+                        <div class="relative overflow-hidden group">
+                            <div class="absolute inset-0 bg-gradient-to-r from-emerald-900/60 to-emerald-600/10 rounded-2xl border border-emerald-500/30 transition-all group-hover:border-emerald-500/50"></div>
+                            <div class="relative p-6 flex justify-between items-center">
+                                <div class="flex-grow">
+                                    <label class="block text-sm font-bold text-emerald-400 mb-1">TOTAL CASH IN HAND</label>
+                                    <div class="flex items-center gap-2">
+                                        <p class="text-[10px] text-emerald-500/60 font-mono">(Opening + Income - Expenses)</p>
+                                        <!-- Reset Button for Manual Mode -->
+                                        <button type="button" id="recalc-btn" class="hidden text-xs bg-emerald-500/20 hover:bg-emerald-500/40 text-emerald-300 px-2 py-0.5 rounded transition" title="Reset to Auto-Calculation">
+                                            <i class="fa-solid fa-rotate-right"></i> Auto
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-3">
+                                    <div class="flex items-center relative">
+                                        <i class="fa-solid fa-indian-rupee-sign text-2xl mr-2 opacity-70 text-emerald-400 absolute left-[-25px]"></i>
+                                        <!-- Editable Input for Deposit Amount -->
+                                        <input type="number" id="deposit-amount-input" 
+                                            class="text-4xl font-bold text-white font-mono tracking-tight bg-transparent border-b-2 border-transparent hover:border-emerald-500/30 focus:border-emerald-500 focus:outline-none w-48 text-right transition-colors" 
+                                            placeholder="0.00" step="any">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="flex gap-3">
+                            <button type="button" id="reset-btn" class="px-6 py-3.5 rounded-xl border border-gray-600 text-gray-400 hover:text-white hover:bg-white/5 transition font-medium">
+                                Clear
+                            </button>
+                            <button type="submit" id="save-btn" class="flex-grow bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-bold py-3.5 px-4 rounded-xl shadow-lg shadow-blue-900/30 transition transform active:scale-[0.98] border border-blue-400/20 flex items-center justify-center gap-2">
+                                <i class="fa-solid fa-save"></i> Save Record
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Right Column: History & Stats -->
+            <div class="lg:col-span-5 h-full space-y-6">
+                
+                <!-- Monthly Summary -->
+                <div class="glass-panel rounded-2xl p-6 shadow-lg">
+                    <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                        <i class="fa-regular fa-calendar-check"></i> This Month Overview
+                    </h3>
+                    <div class="grid grid-cols-1 gap-3">
+                        <div class="bg-gradient-to-r from-blue-900/40 to-blue-900/20 p-4 rounded-xl border border-blue-500/20 flex items-center justify-between">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400">
+                                    <i class="fa-solid fa-arrow-trend-up"></i>
+                                </div>
+                                <div class="text-xs text-blue-200">Total Income</div>
+                            </div>
+                            <div class="text-xl font-bold text-blue-400 font-mono" id="month-income">0</div>
+                        </div>
+
+                        <div class="bg-gradient-to-r from-red-900/40 to-red-900/20 p-4 rounded-xl border border-red-500/20 flex items-center justify-between">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center text-red-400">
+                                    <i class="fa-solid fa-arrow-trend-down"></i>
+                                </div>
+                                <div class="text-xs text-red-200">Total Expenses</div>
+                            </div>
+                            <div class="text-xl font-bold text-red-400 font-mono" id="month-expense">0</div>
+                        </div>
+
+                        <div class="bg-gradient-to-r from-emerald-900/40 to-emerald-900/20 p-4 rounded-xl border border-emerald-500/20 flex items-center justify-between mt-1">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400">
+                                    <i class="fa-solid fa-wallet"></i>
+                                </div>
+                                <div class="text-xs text-emerald-200 font-bold">Net Profit</div>
+                            </div>
+                            <div class="text-2xl font-bold text-emerald-400 font-mono" id="month-profit">0</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Chart Section -->
+                <div class="glass-panel rounded-2xl p-4 shadow-lg h-48 sm:h-56 relative">
+                    <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 absolute top-4 left-4">7-Day Trend</h3>
+                    <div class="w-full h-full pt-6">
+                        <canvas id="trendChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Recent History List -->
+                <div class="glass-panel rounded-2xl p-5 shadow-lg flex-grow flex flex-col max-h-[400px]">
+                    <h2 class="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                        <i class="fa-solid fa-clock-rotate-left text-purple-400"></i> Recent Records
+                    </h2>
+                    
+                    <div id="loading-spinner" class="flex justify-center items-center py-10 hidden">
+                        <i class="fa-solid fa-circle-notch fa-spin text-3xl text-blue-500"></i>
+                    </div>
+                    
+                    <div id="history-list" class="flex-grow overflow-y-auto space-y-3 pr-1 custom-scrollbar">
+                        <!-- History items will be injected here -->
+                    </div>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="fixed bottom-6 right-6 bg-gray-900 border border-gray-700 text-white px-6 py-4 rounded-xl shadow-2xl transform translate-y-24 opacity-0 transition-all duration-300 flex items-center gap-3 z-50">
+        <i id="toast-icon" class="fa-solid fa-check-circle text-green-500 text-xl"></i>
+        <div class="flex flex-col">
+            <span id="toast-title" class="font-bold text-sm">Success</span>
+            <span id="toast-message" class="text-xs text-gray-400">Operation successful</span>
+        </div>
+    </div>
+
+    <!-- Firebase Logic -->
     <script type="module">
-        import * as THREE from 'https://cdn.skypack.dev/three@0.136.0';
-        import { OrbitControls } from 'https://cdn.skypack.dev/three@0.136.0/examples/jsm/controls/OrbitControls.js';
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
+        import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
+        import { getFirestore, doc, setDoc, collection, onSnapshot, getDoc } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
 
-        // --- GLOBAL STATE ---
-        const state = {
-            handDetected: false,
-            tension: 0, // 0 = Open (Relaxed), 1 = Closed (Tense)
-            handCentroid: { x: 0.5, y: 0.5 }, // Normalized 0-1
-            expansionFactor: 1.0, 
-            targetColor: new THREE.Color('#00f2ff'),
-            template: 'saturn',
-            enableRotation: false,
-            autoPulse: false
+        // --- Configuration ---
+        const userProvidedConfig = {
+            apiKey: "AIzaSyB4sRkEmi7BAk8fy-lKd2QQcAGr0oC6TcE",
+            authDomain: "my-account-manager-109f7.firebaseapp.com",
+            projectId: "my-account-manager-109f7",
+            storageBucket: "my-account-manager-109f7.firebasestorage.app",
+            messagingSenderId: "81950076374",
+            appId: "1:81950076374:web:26f6450a4e9f2e6a890877"
         };
 
-        // --- THREE.JS SETUP ---
-        const container = document.getElementById('canvas-container');
-        const scene = new THREE.Scene();
-        scene.fog = new THREE.FogExp2(0x050505, 0.002);
+        let firebaseConfig = userProvidedConfig;
+        let appId = "my-account-manager-109f7";
 
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.z = 30;
-        camera.position.y = 10;
+        if (typeof __firebase_config !== 'undefined' && __firebase_config) {
+            try {
+                firebaseConfig = JSON.parse(__firebase_config);
+                appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+            } catch (e) {
+                console.error("Error parsing environment config, using fallback.");
+            }
+        }
 
-        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(window.devicePixelRatio);
-        container.appendChild(renderer.domElement);
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const provider = new GoogleAuthProvider();
 
-        const controls = new OrbitControls(camera, renderer.domElement);
-        controls.enableDamping = true;
-        controls.autoRotate = true;
-        controls.autoRotateSpeed = 1.0;
-        controls.enableZoom = true;
+        // --- State ---
+        let currentUser = null;
+        let expenses = [{ remark: '', amount: 0 }];
+        let historyUnsubscribe = null;
+        let allRecordsCache = [];
+        let chartInstance = null;
+        let isManualDeposit = false; // Flag to track manual editing
 
-        // --- PARTICLE SYSTEM ---
-        const PARTICLE_COUNT = 18000;
-        const geometry = new THREE.BufferGeometry();
-        const basePositions = new Float32Array(PARTICLE_COUNT * 3);
-        const currentPositions = new Float32Array(PARTICLE_COUNT * 3);
-        const sizes = new Float32Array(PARTICLE_COUNT); // Variable sizes
+        // --- UI References ---
+        const authContainer = document.getElementById('auth-container');
+        const appContainer = document.getElementById('app-container');
+        const googleLoginBtn = document.getElementById('google-login-btn');
+        const logoutBtn = document.getElementById('logout-btn');
+        const userEmailDiv = document.getElementById('user-email');
+        const userGreetingDiv = document.getElementById('user-greeting');
+        const authError = document.getElementById('auth-error');
         
-        function createGlowTexture() {
-            const canvas = document.createElement('canvas');
-            canvas.width = 64;
-            canvas.height = 64;
-            const context = canvas.getContext('2d');
-            const gradient = context.createRadialGradient(32, 32, 0, 32, 32, 32);
-            gradient.addColorStop(0, 'rgba(255,255,255,1)');
-            gradient.addColorStop(0.15, 'rgba(255,255,255,0.9)');
-            gradient.addColorStop(0.4, 'rgba(255,255,255,0.2)');
-            gradient.addColorStop(1, 'rgba(0,0,0,0)');
-            context.fillStyle = gradient;
-            context.fillRect(0, 0, 64, 64);
-            return new THREE.Texture(canvas);
-        }
-        
-        const glowTex = createGlowTexture();
-        glowTex.needsUpdate = true;
+        const dateInput = document.getElementById('entry-date');
+        const openingBalanceInput = document.getElementById('opening-balance');
+        const totalPatientsInput = document.getElementById('total-patients');
+        const totalIncomeInput = document.getElementById('total-income');
+        const splitCashInput = document.getElementById('split-cash');
+        const splitGpayInput = document.getElementById('split-gpay');
+        const splitStatus = document.getElementById('split-status');
+        const expensesListEl = document.getElementById('expenses-list');
+        const addExpenseBtn = document.getElementById('add-expense-btn');
+        const totalExpensesDisplay = document.getElementById('total-expenses-display');
+        const depositAmountInput = document.getElementById('deposit-amount-input');
+        const dailyForm = document.getElementById('daily-form');
+        const historyListEl = document.getElementById('history-list');
+        const prevDayBtn = document.getElementById('prev-day-btn');
+        const nextDayBtn = document.getElementById('next-day-btn');
+        const exportBtn = document.getElementById('export-btn');
+        const resetBtn = document.getElementById('reset-btn');
+        const recalcBtn = document.getElementById('recalc-btn');
 
-        const material = new THREE.PointsMaterial({
-            size: 0.6,
-            map: glowTex,
-            transparent: true,
-            opacity: 0.8,
-            vertexColors: false,
-            color: state.targetColor,
-            blending: THREE.AdditiveBlending,
-            depthWrite: false,
-            sizeAttenuation: true
-        });
+        // Visual Bars
+        const barCash = document.getElementById('bar-cash');
+        const barOnline = document.getElementById('bar-online');
+        const barGap = document.getElementById('bar-gap');
 
-        const particles = new THREE.Points(geometry, material);
-        scene.add(particles);
+        // Initialize Date
+        const today = new Date();
+        dateInput.valueAsDate = today;
 
-        // --- TEMPLATE GENERATORS ---
-        function setTemplate(name) {
-            state.template = name;
-            const positions = basePositions;
-            
-            for (let i = 0; i < PARTICLE_COUNT; i++) {
-                const i3 = i * 3;
-                let x, y, z;
-                
-                // Varied sizes for depth
-                sizes[i] = Math.random() * 0.8 + 0.2;
-
-                if (name === 'saturn') {
-                    if (Math.random() > 0.3) {
-                        // Ring
-                        const angle = Math.random() * Math.PI * 2;
-                        const radius = 12 + Math.random() * 18;
-                        x = Math.cos(angle) * radius;
-                        z = Math.sin(angle) * radius;
-                        y = (Math.random() - 0.5) * 1.0; 
-                    } else {
-                        // Planet
-                        const r = 9 * Math.cbrt(Math.random());
-                        const theta = Math.random() * Math.PI * 2;
-                        const phi = Math.acos(2 * Math.random() - 1);
-                        x = r * Math.sin(phi) * Math.cos(theta);
-                        y = r * Math.sin(phi) * Math.sin(theta);
-                        z = r * Math.cos(phi);
-                    }
-                }
-                else if (name === 'dna') {
-                    // Double Helix
-                    const turns = 4;
-                    const len = 45;
-                    const radius = 5;
-                    
-                    const t = (i / PARTICLE_COUNT) * Math.PI * 2 * turns;
-                    const h = ((i / PARTICLE_COUNT) - 0.5) * len;
-                    
-                    // 50% split for strands + random noise "rungs"
-                    const isStrand1 = Math.random() > 0.5;
-                    const offset = isStrand1 ? 0 : Math.PI;
-                    
-                    // Add noise to make it look like a cloud, not a line
-                    const noise = 1.2;
-                    
-                    x = (radius + (Math.random()-0.5)*noise) * Math.cos(t + offset);
-                    z = (radius + (Math.random()-0.5)*noise) * Math.sin(t + offset);
-                    y = h + (Math.random()-0.5)*noise;
-
-                    // DNA Rungs (connections)
-                    if (Math.random() > 0.95) {
-                        const rungT = Math.random() * Math.PI * 2 * turns;
-                        const rungH = (rungT / (Math.PI * 2 * turns) - 0.5) * len;
-                        const rungPos = (Math.random() * 2 - 1) * radius; // Linear interpolate across
-                        x = rungPos * Math.cos(rungT);
-                        z = rungPos * Math.sin(rungT);
-                        y = rungH;
-                    }
-                }
-                else if (name === 'fireworks') {
-                    const r = Math.random() * 45;
-                    const theta = Math.random() * Math.PI * 2;
-                    const phi = Math.acos(2 * Math.random() - 1);
-                    const noise = Math.random() * 3;
-                    x = (r + noise) * Math.sin(phi) * Math.cos(theta);
-                    y = (r + noise) * Math.sin(phi) * Math.sin(theta);
-                    z = (r + noise) * Math.cos(phi);
-                }
-                else if (name === 'vortex') {
-                    const angle = i * 0.05;
-                    const radius = 4 + Math.random() * 12;
-                    const depth = (i % 100) - 50; 
-                    x = Math.cos(angle) * radius;
-                    y = Math.sin(angle) * radius;
-                    z = depth * 1.5 + (Math.random() * 5);
-                }
-                else { // Cloud
-                    x = (Math.random() - 0.5) * 60;
-                    y = (Math.random() - 0.5) * 60;
-                    z = (Math.random() - 0.5) * 60;
-                }
-
-                positions[i3] = x;
-                positions[i3 + 1] = y;
-                positions[i3 + 2] = z;
+        // --- Authentication ---
+        const initAuth = async () => {
+            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                try {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } catch (error) { console.error("Custom token auth failed", error); }
             }
-            
-            // Re-apply current pos from base
-            geometry.setAttribute('position', new THREE.BufferAttribute(currentPositions, 3));
-            geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
-        }
+        };
+        initAuth();
 
-        // Initialize default
-        setTemplate('saturn');
-
-        // --- ANIMATION LOOP ---
-        const clock = new THREE.Clock();
-
-        function animate() {
-            requestAnimationFrame(animate);
-            const time = clock.getElapsedTime();
-            
-            controls.update();
-
-            // --- INTERACTION LOGIC ---
-            let targetScale = 1.0;
-
-            if (state.autoPulse) {
-                // Ignore hand tension for scale, use sine wave
-                targetScale = 1.2 + Math.sin(time * 2) * 0.5; // Pulse between 0.7 and 1.7
-                controls.autoRotate = true; // Force auto rotate in relax mode
-            } 
-            else if (state.handDetected) {
-                // Map tension (0..1) to Scale
-                // Open (0) -> Large (1.8)
-                // Closed (1) -> Small (0.1)
-                targetScale = 1.8 - (state.tension * 1.7);
+        onAuthStateChanged(auth, (user) => {
+            currentUser = user;
+            if (user) {
+                authContainer.classList.add('hidden');
+                appContainer.classList.remove('hidden');
                 
-                // Hand Rotation Control
-                if (state.enableRotation) {
-                    controls.autoRotate = false; // Disable auto rotate to let user control
-                    
-                    // Map hand 0..1 to rotation angles
-                    // X (Left/Right) controls Rotation Y
-                    // Y (Up/Down) controls Rotation X
-                    const targetRotY = (state.handCentroid.x - 0.5) * -5; // Range -2.5 to 2.5 rad
-                    const targetRotX = (state.handCentroid.y - 0.5) * 5;
+                const hour = new Date().getHours();
+                const greeting = hour < 12 ? "Good Morning," : hour < 18 ? "Good Afternoon," : "Good Evening,";
+                userGreetingDiv.textContent = greeting;
+                userEmailDiv.textContent = user.displayName || user.email;
 
-                    // Smooth Lerp
-                    particles.rotation.y += (targetRotY - particles.rotation.y) * 0.08;
-                    particles.rotation.x += (targetRotX - particles.rotation.x) * 0.08;
-                } else {
-                    controls.autoRotate = true;
-                    // Slowly return mesh to neutral if rotation disabled
-                    particles.rotation.x *= 0.95;
-                    particles.rotation.z *= 0.95;
-                }
-            }
-
-            // Smooth interpolation of expansion
-            state.expansionFactor += (targetScale - state.expansionFactor) * 0.08;
-            document.getElementById('expansion-val').innerText = Math.round(state.expansionFactor * 100) + '%';
-
-            // --- PARTICLE UPDATE ---
-            const pos = geometry.attributes.position.array;
-            
-            for (let i = 0; i < PARTICLE_COUNT; i++) {
-                const i3 = i * 3;
-                
-                let bx = basePositions[i3];
-                let by = basePositions[i3 + 1];
-                let bz = basePositions[i3 + 2];
-
-                // Template-specific animations
-                if (state.template === 'fireworks') {
-                    by -= 0.05 * Math.sin(time * 0.5 + i); 
-                } else if (state.template === 'vortex') {
-                    bz += 0.3;
-                    if(bz > 60) bz = -60;
-                    // Fake infinite loop
-                    bz = basePositions[i3 + 2] + (time * 5 % 100) - 50; 
-                } else if (state.template === 'dna') {
-                    // Twist the DNA slightly over time
-                    const twist = time * 0.2;
-                    const oldX = bx;
-                    const oldZ = bz;
-                    // Simple Y-axis rotation matrix
-                    bx = oldX * Math.cos(twist) - oldZ * Math.sin(twist);
-                    bz = oldX * Math.sin(twist) + oldZ * Math.cos(twist);
-                }
-
-                // Apply Expansion
-                pos[i3] = bx * state.expansionFactor;
-                pos[i3+1] = by * state.expansionFactor;
-                pos[i3+2] = bz * state.expansionFactor;
-
-                // Breathing/Noise
-                pos[i3] += Math.sin(time * 1.5 + bx * 0.1) * 0.15;
-                pos[i3+1] += Math.cos(time * 1.2 + by * 0.1) * 0.15;
-            }
-
-            geometry.attributes.position.needsUpdate = true;
-            
-            // Color Update
-            material.color.lerp(state.targetColor, 0.05);
-
-            renderer.render(scene, camera);
-        }
-
-        animate();
-
-        // --- HANDLERS ---
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        });
-
-        document.getElementById('template-selector').addEventListener('change', (e) => {
-            setTemplate(e.target.value);
-            state.expansionFactor = 0.1; // Visual pop effect
-        });
-
-        document.getElementById('color-picker').addEventListener('input', (e) => {
-            state.targetColor.set(e.target.value);
-        });
-
-        document.getElementById('rotate-toggle').addEventListener('change', (e) => {
-            state.enableRotation = e.target.checked;
-        });
-
-        document.getElementById('pulse-toggle').addEventListener('change', (e) => {
-            state.autoPulse = e.target.checked;
-        });
-
-        // --- MEDIAPIPE LOGIC ---
-        const videoElement = document.getElementById('input_video');
-        const statusDot = document.getElementById('hand-dot');
-        const statusText = document.getElementById('hand-status');
-
-        function onResults(results) {
-            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-                state.handDetected = true;
-                statusDot.classList.add('active');
-                statusText.innerText = "Tracking Hand";
-                statusText.style.color = state.targetColor.getStyle(); // Sync text color
-
-                const landmarks = results.multiHandLandmarks[0];
-                
-                // 1. Calculate Centroid (for rotation)
-                let cx = 0, cy = 0;
-                landmarks.forEach(l => { cx += l.x; cy += l.y; });
-                state.handCentroid = { x: cx / 21, y: cy / 21 };
-
-                // 2. Calculate Tension (Open vs Closed)
-                const wrist = landmarks[0];
-                const fingers = [8, 12, 16, 20]; 
-                let totalDist = 0;
-                const dist = (p1, p2) => Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2));
-                const palmSize = dist(wrist, landmarks[5]);
-
-                fingers.forEach(idx => {
-                    totalDist += dist(wrist, landmarks[idx]);
-                });
-                
-                const avgDist = totalDist / 4;
-                const ratio = avgDist / palmSize; // >2.2 Open, <1.0 Closed
-
-                let rawTension = 1 - ((ratio - 0.8) / (2.2 - 0.8));
-                if (rawTension < 0) rawTension = 0;
-                if (rawTension > 1) rawTension = 1;
-
-                state.tension = rawTension;
-
+                setupRealtimeListeners(user.uid);
+                loadDateData(dateInput.value);
             } else {
-                state.handDetected = false;
-                statusDot.classList.remove('active');
-                statusText.innerText = "Searching...";
-                statusText.style.color = "#aaa";
-                state.tension = 0;
+                appContainer.classList.add('hidden');
+                authContainer.classList.remove('hidden');
+                if (historyUnsubscribe) historyUnsubscribe();
             }
+        });
+
+        googleLoginBtn.addEventListener('click', async () => {
+            authError.classList.add('hidden');
+            try {
+                await signInWithPopup(auth, provider);
+            } catch (error) {
+                authError.textContent = "Login failed: " + error.message;
+                authError.classList.remove('hidden');
+            }
+        });
+
+        logoutBtn.addEventListener('click', () => signOut(auth));
+
+        // --- Data Logic ---
+        function getCollectionPath(uid) {
+            return collection(db, 'artifacts', appId, 'users', uid, 'daily_records');
         }
 
-        const hands = new Hands({locateFile: (file) => {
-            return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
-        }});
-
-        hands.setOptions({
-            maxNumHands: 1,
-            modelComplexity: 1,
-            minDetectionConfidence: 0.5,
-            minTrackingConfidence: 0.5
-        });
-
-        hands.onResults(onResults);
-
-        // --- STARTUP ---
-        document.getElementById('start-btn').addEventListener('click', () => {
-            const cameraUtils = new Camera(videoElement, {
-                onFrame: async () => {
-                    await hands.send({image: videoElement});
-                },
-                width: 320,
-                height: 240
-            });
+        function setupRealtimeListeners(uid) {
+            const q = getCollectionPath(uid);
+            document.getElementById('loading-spinner').classList.remove('hidden');
             
-            cameraUtils.start()
-                .then(() => {
-                    const loader = document.getElementById('loader');
-                    loader.style.opacity = '0';
-                    setTimeout(() => { loader.style.display = 'none'; }, 500);
-                })
-                .catch(err => {
-                    alert("Camera failed to start: " + err);
-                });
+            historyUnsubscribe = onSnapshot(q, (snapshot) => {
+                const records = [];
+                snapshot.forEach(doc => records.push(doc.data()));
+                records.sort((a, b) => new Date(b.dateString) - new Date(a.dateString));
+                allRecordsCache = records;
+
+                renderHistory(records);
+                updateMonthlyStats(records);
+                updateChart(records);
+                document.getElementById('loading-spinner').classList.add('hidden');
+            }, (error) => showToast("Error", "Could not load history", "error"));
+        }
+
+        async function loadDateData(dateStr) {
+            if (!currentUser) return;
+            const dateObj = new Date(dateStr);
+            const friendlyDate = dateObj.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+            document.getElementById('form-title').textContent = friendlyDate;
+
+            // Reset manual flag on load
+            isManualDeposit = false;
+            recalcBtn.classList.add('hidden');
+            depositAmountInput.classList.remove('text-yellow-400'); // Reset highlight
+
+            const docRef = doc(db, 'artifacts', appId, 'users', currentUser.uid, 'daily_records', dateStr);
+            try {
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists()) {
+                    populateForm(docSnap.data());
+                } else {
+                    // IF NEW ENTRY: Try to find previous day's data for Opening Balance
+                    const prevDate = new Date(dateObj);
+                    prevDate.setDate(prevDate.getDate() - 1);
+                    const prevDateStr = prevDate.toISOString().split('T')[0];
+                    
+                    const prevDocRef = doc(db, 'artifacts', appId, 'users', currentUser.uid, 'daily_records', prevDateStr);
+                    const prevDocSnap = await getDoc(prevDocRef);
+                    
+                    let prevBalance = 0;
+                    if (prevDocSnap.exists()) {
+                        prevBalance = prevDocSnap.data().depositAmount || 0;
+                        showToast("Autofill", `Carried over ₹${prevBalance} from ${prevDateStr}`);
+                    }
+                    
+                    resetForm(prevBalance);
+                }
+            } catch (e) { console.error(e); }
+        }
+
+        // --- Chart.js Logic ---
+        function updateChart(records) {
+            const ctx = document.getElementById('trendChart').getContext('2d');
+            const recentRecords = records.slice(0, 7).reverse();
+            const labels = recentRecords.map(r => {
+                const d = new Date(r.dateString);
+                return `${d.getDate()}/${d.getMonth()+1}`;
+            });
+            const incomeData = recentRecords.map(r => r.totalIncome);
+            const expenseData = recentRecords.map(r => {
+                return r.expenses ? r.expenses.reduce((sum, e) => sum + (e.amount||0), 0) : 0;
+            });
+
+            if (chartInstance) chartInstance.destroy();
+
+            const gradientIncome = ctx.createLinearGradient(0, 0, 0, 200);
+            gradientIncome.addColorStop(0, 'rgba(59, 130, 246, 0.5)');
+            gradientIncome.addColorStop(1, 'rgba(59, 130, 246, 0.0)');
+
+            chartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Income',
+                            data: incomeData,
+                            borderColor: '#3b82f6',
+                            backgroundColor: gradientIncome,
+                            borderWidth: 2,
+                            fill: true,
+                            tension: 0.4,
+                            pointRadius: 3
+                        },
+                        {
+                            label: 'Expense',
+                            data: expenseData,
+                            borderColor: '#f87171',
+                            borderWidth: 2,
+                            borderDash: [5, 5],
+                            fill: false,
+                            tension: 0.4,
+                            pointRadius: 0
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                            backgroundColor: 'rgba(17, 24, 39, 0.9)',
+                            titleColor: '#fff',
+                            bodyColor: '#e5e7eb',
+                            borderColor: 'rgba(255,255,255,0.1)',
+                            borderWidth: 1
+                        }
+                    },
+                    scales: {
+                        x: { display: true, grid: { display: false }, ticks: { color: '#6b7280', font: {size: 10} } },
+                        y: { display: false, grid: { display: false } }
+                    }
+                }
+            });
+        }
+
+        // --- Monthly Stats ---
+        function updateMonthlyStats(records) {
+            const now = new Date();
+            const currentMonth = now.getMonth();
+            const currentYear = now.getFullYear();
+
+            let mIncome = 0;
+            let mExpense = 0;
+
+            records.forEach(r => {
+                const d = new Date(r.dateString);
+                if (d.getMonth() === currentMonth && d.getFullYear() === currentYear) {
+                    mIncome += (r.totalIncome || 0);
+                    const dailyExp = r.expenses ? r.expenses.reduce((s, e) => s + (e.amount||0), 0) : 0;
+                    mExpense += dailyExp;
+                }
+            });
+
+            document.getElementById('month-income').textContent = formatCurrency(mIncome);
+            document.getElementById('month-expense').textContent = formatCurrency(mExpense);
+            document.getElementById('month-profit').textContent = formatCurrency(mIncome - mExpense);
+        }
+
+        // --- UI Form Logic ---
+        function populateForm(data) {
+            openingBalanceInput.value = data.openingBalance || 0;
+            totalPatientsInput.value = data.totalPatients || 0;
+            totalIncomeInput.value = data.totalIncome || 0;
+            splitCashInput.value = data.paymentSplit?.cash || 0;
+            splitGpayInput.value = data.paymentSplit?.gpay || 0;
+            expenses = data.expenses && data.expenses.length > 0 ? data.expenses : [{ remark: '', amount: 0 }];
+            
+            // Check if saved amount differs from calculated
+            const savedDeposit = data.depositAmount || 0;
+            const openBal = parseFloat(data.openingBalance || 0);
+            const inc = parseFloat(data.totalIncome || 0);
+            const expTotal = expenses.reduce((s, e) => s + (e.amount || 0), 0);
+            const calculated = openBal + inc - expTotal;
+
+            if (Math.abs(savedDeposit - calculated) > 0.01) {
+                isManualDeposit = true;
+                recalcBtn.classList.remove('hidden');
+                depositAmountInput.value = savedDeposit;
+                depositAmountInput.classList.add('text-yellow-400'); // Highlight manual override
+            } else {
+                isManualDeposit = false;
+                recalcBtn.classList.add('hidden');
+                depositAmountInput.value = calculated;
+                depositAmountInput.classList.remove('text-yellow-400');
+            }
+
+            renderExpenses();
+            calculateTotals(false); // don't overwrite if manual
+        }
+
+        function resetForm(initialOpeningBalance = 0) {
+            openingBalanceInput.value = initialOpeningBalance;
+            totalPatientsInput.value = '';
+            totalIncomeInput.value = '';
+            splitCashInput.value = '';
+            splitGpayInput.value = '';
+            expenses = [{ remark: '', amount: 0 }];
+            isManualDeposit = false;
+            recalcBtn.classList.add('hidden');
+            depositAmountInput.classList.remove('text-yellow-400');
+            renderExpenses();
+            calculateTotals();
+        }
+
+        resetBtn.addEventListener('click', () => {
+            if(confirm('Clear current form data?')) resetForm();
         });
+
+        // Recalculate Button (Manual -> Auto)
+        recalcBtn.addEventListener('click', () => {
+            isManualDeposit = false;
+            recalcBtn.classList.add('hidden');
+            depositAmountInput.classList.remove('text-yellow-400');
+            calculateTotals();
+            showToast("Reset", "Reverted to auto-calculation");
+        });
+
+        // Manual Edit Event
+        depositAmountInput.addEventListener('input', () => {
+            isManualDeposit = true;
+            recalcBtn.classList.remove('hidden');
+            depositAmountInput.classList.add('text-yellow-400'); // Visual cue
+        });
+
+        function renderExpenses() {
+            expensesListEl.innerHTML = '';
+            expenses.forEach((exp, index) => {
+                const row = document.createElement('div');
+                row.className = 'flex gap-2 items-center animate-slide-up';
+                row.style.animationDelay = `${index * 50}ms`;
+                row.innerHTML = `
+                    <input type="text" placeholder="Item Name" 
+                        class="flex-grow px-3 py-2 rounded-lg border border-gray-600 bg-dark-700 text-sm focus:bg-dark-600 transition"
+                        value="${exp.remark}" 
+                        onchange="updateExpense(${index}, 'remark', this.value)">
+                    <input type="number" placeholder="0" min="0" 
+                        class="w-20 px-3 py-2 rounded-lg border border-gray-600 bg-dark-700 text-sm focus:bg-dark-600 text-right transition"
+                        value="${exp.amount === 0 ? '' : exp.amount}" 
+                        onchange="updateExpense(${index}, 'amount', this.value)">
+                    <button type="button" onclick="removeExpense(${index})" 
+                        class="text-red-400 hover:text-red-300 hover:bg-red-400/10 p-2 rounded-lg transition ${expenses.length === 1 ? 'opacity-30 cursor-not-allowed' : ''}" 
+                        ${expenses.length === 1 ? 'disabled' : ''}>
+                        <i class="fa-solid fa-trash-can"></i>
+                    </button>
+                `;
+                expensesListEl.appendChild(row);
+            });
+            calculateTotals(false); // Don't force update if manual
+        }
+
+        window.updateExpense = (index, field, value) => {
+            if (field === 'amount') expenses[index][field] = parseFloat(value) || 0;
+            else expenses[index][field] = value;
+            calculateTotals();
+        };
+
+        window.removeExpense = (index) => {
+            if (expenses.length > 1) {
+                expenses.splice(index, 1);
+                renderExpenses();
+            }
+        };
+
+        addExpenseBtn.addEventListener('click', () => {
+            expenses.push({ remark: '', amount: 0 });
+            renderExpenses();
+        });
+
+        function calculateTotals(updateInput = true) {
+            const openBal = parseFloat(openingBalanceInput.value) || 0;
+            const income = parseFloat(totalIncomeInput.value) || 0;
+            const cash = parseFloat(splitCashInput.value) || 0;
+            const gpay = parseFloat(splitGpayInput.value) || 0;
+            
+            // --- Visual Bar ---
+            let cashPct = 0, onlinePct = 0, gapPct = 0;
+            const totalSplit = cash + gpay;
+            const diff = income - totalSplit;
+
+            if (income > 0) {
+                cashPct = (cash / income) * 100;
+                onlinePct = (gpay / income) * 100;
+                if (cashPct + onlinePct > 100) {
+                    const total = cashPct + onlinePct;
+                    cashPct = (cashPct / total) * 100;
+                    onlinePct = (onlinePct / total) * 100;
+                }
+                gapPct = 100 - (cashPct + onlinePct);
+            }
+
+            barCash.style.width = `${cashPct}%`;
+            barOnline.style.width = `${onlinePct}%`;
+            barGap.style.width = `${Math.max(0, gapPct)}%`;
+
+            if (income > 0) {
+                if (Math.abs(diff) < 0.01) {
+                    splitStatus.innerHTML = '<span class="text-green-400 font-bold"><i class="fa-solid fa-check"></i> Balanced</span>';
+                    barGap.classList.add('hidden');
+                } else if (diff > 0) {
+                    splitStatus.innerHTML = `<span class="text-yellow-400 font-bold"><i class="fa-solid fa-triangle-exclamation"></i> Missing ${diff}</span>`;
+                    barGap.classList.remove('hidden');
+                    barGap.className = "h-full bg-red-500/50 transition-all duration-300";
+                } else {
+                    splitStatus.innerHTML = `<span class="text-red-400 font-bold"><i class="fa-solid fa-triangle-exclamation"></i> Excess ${Math.abs(diff)}</span>`;
+                    barGap.classList.remove('hidden');
+                    barGap.className = "h-full bg-yellow-500 transition-all duration-300";
+                }
+            } else {
+                splitStatus.innerHTML = '';
+                barCash.style.width = '0%';
+                barOnline.style.width = '0%';
+                barGap.style.width = '100%';
+                barGap.className = "h-full bg-gray-700 transition-all duration-300";
+            }
+
+            const totalExp = expenses.reduce((sum, item) => sum + (item.amount || 0), 0);
+            totalExpensesDisplay.textContent = formatCurrency(totalExp);
+
+            // NET DEPOSIT = Opening Balance + Income - Expenses
+            const netDeposit = openBal + income - totalExp;
+            
+            // Only update the input if user hasn't manually overridden it, OR if forced (updateInput=true + manual=false)
+            if (!isManualDeposit && updateInput) {
+                depositAmountInput.value = netDeposit; // Keep raw number in input
+            }
+
+            return { openBal, income, cash, gpay, totalExp, netDeposit: parseFloat(depositAmountInput.value) || 0 };
+        }
+
+        [openingBalanceInput, totalIncomeInput, splitCashInput, splitGpayInput].forEach(input => input.addEventListener('input', () => calculateTotals()));
+
+        // --- Save Logic ---
+        dailyForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (!currentUser) return;
+            
+            // Recalculate stats but take the FINAL VALUE from the input
+            const stats = calculateTotals(false);
+            const finalDepositAmount = parseFloat(depositAmountInput.value) || 0;
+
+            const btn = document.getElementById('save-btn');
+            const originalContent = btn.innerHTML;
+            
+            btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Saving...';
+            btn.disabled = true;
+
+            const record = {
+                dateString: dateInput.value,
+                openingBalance: stats.openBal,
+                totalPatients: parseInt(totalPatientsInput.value) || 0,
+                totalIncome: stats.income,
+                paymentSplit: { cash: stats.cash, gpay: stats.gpay },
+                expenses: expenses.filter(e => e.remark.trim() !== '' || e.amount > 0),
+                depositAmount: finalDepositAmount // Use the editable input value
+            };
+
+            try {
+                await setDoc(doc(db, 'artifacts', appId, 'users', currentUser.uid, 'daily_records', record.dateString), record);
+                showToast("Success", "Daily record saved!");
+            } catch (error) {
+                showToast("Error", error.message, "error");
+            } finally {
+                btn.innerHTML = originalContent;
+                btn.disabled = false;
+            }
+        });
+
+        // --- Date Nav ---
+        function changeDate(days) {
+            const current = new Date(dateInput.value);
+            current.setDate(current.getDate() + days);
+            dateInput.valueAsDate = current;
+            loadDateData(dateInput.value);
+        }
+        prevDayBtn.addEventListener('click', () => changeDate(-1));
+        nextDayBtn.addEventListener('click', () => changeDate(1));
+        dateInput.addEventListener('change', (e) => loadDateData(e.target.value));
+
+        // --- Export to CSV ---
+        exportBtn.addEventListener('click', () => {
+            if (allRecordsCache.length === 0) {
+                showToast("Info", "No data to export", "error");
+                return;
+            }
+
+            let csvContent = "data:text/csv;charset=utf-8,";
+            csvContent += "Date,Opening Bal,Patients,Income,Cash,Online,Expense,Closing Bal,Expense Details\n";
+
+            allRecordsCache.forEach(row => {
+                const expenseTotal = row.expenses ? row.expenses.reduce((s,e)=>s+(e.amount||0),0) : 0;
+                const expenseDetails = row.expenses ? row.expenses.map(e => `${e.remark}(${e.amount})`).join('; ') : "";
+                
+                const csvRow = [
+                    row.dateString,
+                    row.openingBalance || 0,
+                    row.totalPatients || 0,
+                    row.totalIncome || 0,
+                    row.paymentSplit?.cash || 0,
+                    row.paymentSplit?.gpay || 0,
+                    expenseTotal,
+                    row.depositAmount || 0,
+                    `"${expenseDetails}"`
+                ];
+                csvContent += csvRow.join(",") + "\n";
+            });
+
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `HealthCare_Export_${new Date().toISOString().split('T')[0]}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            showToast("Success", "Data downloaded");
+        });
+
+        // --- History Render ---
+        function renderHistory(records) {
+            historyListEl.innerHTML = '';
+            if (records.length === 0) {
+                historyListEl.innerHTML = '<div class="text-center text-gray-500 py-10 italic">No records found. Start by adding today\'s entry.</div>';
+                return;
+            }
+
+            records.forEach(rec => {
+                const el = document.createElement('div');
+                el.className = 'glass-card hover:bg-white/5 p-4 rounded-xl transition cursor-pointer group border-l-4 border-l-transparent hover:border-l-blue-500';
+                
+                const dateObj = new Date(rec.dateString);
+                const day = dateObj.getDate();
+                const month = dateObj.toLocaleString('default', { month: 'short' });
+                const expenseTotal = rec.expenses ? rec.expenses.reduce((s, x) => s + (x.amount||0), 0) : 0;
+
+                el.innerHTML = `
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <div class="bg-dark-800 rounded-lg p-2 text-center min-w-[3.5rem] border border-gray-700">
+                                <div class="text-xs text-gray-400 uppercase">${month}</div>
+                                <div class="text-xl font-bold text-white leading-none">${day}</div>
+                            </div>
+                            <div>
+                                <div class="text-sm text-gray-400">Total Cash</div>
+                                <div class="text-lg font-bold text-emerald-400">₹${formatCurrency(rec.depositAmount)}</div>
+                            </div>
+                        </div>
+                        <div class="text-right text-xs text-gray-500 space-y-1">
+                            <div>Op: <span class="text-yellow-500">₹${formatCurrency(rec.openingBalance || 0)}</span></div>
+                            <div>Inc: <span class="text-gray-300">₹${formatCurrency(rec.totalIncome)}</span></div>
+                        </div>
+                    </div>
+                `;
+                
+                el.addEventListener('click', () => {
+                    dateInput.value = rec.dateString;
+                    loadDateData(rec.dateString);
+                    if (window.innerWidth < 1024) window.scrollTo({ top: 0, behavior: 'smooth' });
+                });
+                historyListEl.appendChild(el);
+            });
+        }
+
+        function formatCurrency(num) {
+            return parseFloat(num).toLocaleString('en-IN');
+        }
+
+        function showToast(title, msg, type = 'success') {
+            const toast = document.getElementById('toast');
+            document.getElementById('toast-title').textContent = title;
+            document.getElementById('toast-message').textContent = msg;
+            
+            const icon = document.getElementById('toast-icon');
+            if (type === 'error') {
+                icon.className = 'fa-solid fa-circle-xmark text-red-500 text-xl';
+                document.getElementById('toast-title').className = 'font-bold text-sm text-red-400';
+            } else {
+                icon.className = 'fa-solid fa-check-circle text-green-500 text-xl';
+                document.getElementById('toast-title').className = 'font-bold text-sm text-green-400';
+            }
+
+            toast.classList.remove('translate-y-24', 'opacity-0');
+            setTimeout(() => {
+                toast.classList.add('translate-y-24', 'opacity-0');
+            }, 3000);
+        }
 
     </script>
 </body>
