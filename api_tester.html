@@ -680,7 +680,7 @@
         }
 
         async function sendRequest() {
-            const apiUrl = document.getElementById('apiUrl').value;
+            const apiUrl = document.getElementById('apiUrl').value.replace(/\/$/, '');
             const messages = getMessages();
             const temperature = parseFloat(document.getElementById('temperature').value);
             const topK = parseInt(document.getElementById('topK').value);
@@ -706,7 +706,10 @@
                     stream: false
                 };
 
-                const response = await fetch(`${apiUrl}/v1/chat/completions`, {
+                const fullUrl = apiUrl + '/v1/chat/completions';
+                console.log('Sending request to:', fullUrl);
+
+                const response = await fetch(fullUrl, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -730,6 +733,7 @@
                 document.getElementById('totalTokens').textContent = usage.total_tokens;
                 document.getElementById('statsDetails').textContent = JSON.stringify({
                     timestamp: new Date().toISOString(),
+                    url: fullUrl,
                     model: data.model,
                     finishReason: data.choices[0].finish_reason,
                     parameters: { temperature, topK, maxTokens }
@@ -737,6 +741,7 @@
 
             } catch (error) {
                 showAlert(`Error: ${error.message}`, 'error');
+                console.error('Full error:', error);
             } finally {
                 sendBtn.disabled = false;
                 sendBtn.innerHTML = '<span>🚀</span><span>Send Request</span>';
@@ -788,12 +793,15 @@
         }
 
         async function checkConnection() {
-            const apiUrl = document.getElementById('apiUrl').value;
+            const apiUrl = document.getElementById('apiUrl').value.replace(/\/$/, '');
             const statusDot = document.getElementById('statusDot');
             const statusText = document.getElementById('statusText');
 
             try {
-                const response = await fetch(`${apiUrl}/`, {
+                const fullUrl = apiUrl + '/v1/models';
+                console.log('Testing connection to:', fullUrl);
+                
+                const response = await fetch(fullUrl, {
                     method: 'GET'
                 });
 
@@ -802,11 +810,12 @@
                     statusText.textContent = '✅ Connected to API';
                 } else {
                     statusDot.className = 'status-dot offline';
-                    statusText.textContent = '❌ Connection failed';
+                    statusText.textContent = '❌ Connection failed: ' + response.status;
                 }
             } catch (error) {
                 statusDot.className = 'status-dot offline';
                 statusText.textContent = '❌ Cannot reach API';
+                console.error('Connection error:', error);
             }
         }
 
