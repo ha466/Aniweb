@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Iris Live2D Viewer</title>
     <style>
         body, html {
@@ -11,10 +11,15 @@
             width: 100%;
             height: 100%;
             overflow: hidden;
-            background: radial-gradient(circle at center, #3a3a3a 0%, #1a1a1a 100%); /* Radial gradient for depth */
+            background: radial-gradient(circle at center, #3a3a3a 0%, #1a1a1a 100%);
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             color: white;
+            /* Prevent mobile browser pull-to-refresh and selection */
+            overscroll-behavior-y: contain; 
+            user-select: none;
+            -webkit-user-select: none;
         }
+        
         #canvas-container {
             width: 100%;
             height: 100%;
@@ -22,9 +27,13 @@
             justify-content: center;
             align-items: center;
         }
+        
         canvas {
             display: block;
+            touch-action: none; 
+            outline: none;
         }
+        
         #loading {
             position: absolute;
             top: 50%;
@@ -44,10 +53,9 @@
             bottom: 30px;
             left: 50%;
             transform: translateX(-50%);
-            font-size: 14px;
+            font-size: clamp(12px, 3vw, 14px);
             pointer-events: none;
             
-            /* Glassmorphism Effect */
             background: rgba(255, 255, 255, 0.05);
             backdrop-filter: blur(10px);
             -webkit-backdrop-filter: blur(10px);
@@ -55,10 +63,131 @@
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
             
             padding: 12px 24px;
-            border-radius: 50px; /* Pill shape */
+            border-radius: 50px;
             color: rgba(255, 255, 255, 0.8);
             letter-spacing: 0.5px;
-            white-space: nowrap;
+            text-align: center;
+            z-index: 10;
+            width: max-content;
+            max-width: 90%;
+        }
+
+        /* UI Wrapper for Menu */
+        #ui-wrapper {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 20;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 12px;
+            opacity: 0; /* Hidden until loaded */
+            transition: opacity 0.5s;
+        }
+
+        /* Circular Menu Button */
+        #menu-btn {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+            transition: all 0.3s ease;
+            outline: none;
+            padding: 0;
+        }
+
+        #menu-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: scale(1.05);
+        }
+
+        /* Expression Panel Styling */
+        #expression-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            background: rgba(20, 20, 20, 0.6);
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            padding: 16px;
+            border-radius: 16px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+            
+            /* Hidden by default */
+            opacity: 0;
+            transform: translateY(-10px) scale(0.95);
+            pointer-events: none;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            transform-origin: top right;
+        }
+
+        #expression-panel.open {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+            pointer-events: auto;
+        }
+
+        .expr-btn {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: white;
+            padding: 10px 15px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-family: inherit;
+            text-align: left;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+            outline: none;
+        }
+
+        .expr-btn:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .expr-btn.active {
+            background: rgba(255, 255, 255, 0.3);
+            border-color: rgba(255, 255, 255, 0.5);
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.2);
+        }
+
+        @media (max-width: 600px) {
+            #controls-info {
+                bottom: 20px;
+                padding: 10px 16px;
+                white-space: normal;
+                line-height: 1.4;
+            }
+            
+            #ui-wrapper {
+                top: 10px;
+                right: 10px;
+                gap: 8px;
+            }
+
+            #menu-btn {
+                width: 40px;
+                height: 40px;
+            }
+            
+            .expr-btn {
+                padding: 8px 12px;
+                font-size: 12px;
+            }
         }
     </style>
     
@@ -72,7 +201,23 @@
     <div id="loading">Initializing...</div>
     
     <div id="controls-info">
-        Left Click to Drag • Scroll to Zoom • Click Model to Interact
+        Drag to Move • Scroll/Pinch to Zoom • Follows Pointer
+    </div>
+
+    <!-- Parameter UI -->
+    <div id="ui-wrapper">
+        <button id="menu-btn" title="Toggle Expressions">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+        </button>
+        <div id="expression-panel">
+            <button class="expr-btn" data-param="Button1">Dark Face</button>
+            <button class="expr-btn" data-param="Button2">Blushing</button>
+            <button class="expr-btn" data-param="Button7">Heart Eyes</button>
+            <button class="expr-btn" data-param="Button3">Eye Highlights Disappear</button>
+            <button class="expr-btn" data-param="Button4">Crying</button>
+            <button class="expr-btn" data-param="ParamEyeExpression1">Angry-Surprised</button>
+            <button class="expr-btn" data-param="ParamEyeExpression2">Sad-Happy</button>
+        </div>
     </div>
 
     <div id="canvas-container">
@@ -88,25 +233,40 @@
         const { Live2DModel } = PIXI.live2d;
         let app;
         let currentModel = null;
+        
+        // Expression State Tracking (current value, target value for smooth lerping)
+        const expressionState = {
+            'Button1': { current: 0, target: 0 },
+            'Button2': { current: 0, target: 0 },
+            'Button7': { current: 0, target: 0 },
+            'Button3': { current: 0, target: 0 },
+            'Button4': { current: 0, target: 0 },
+            'ParamEyeExpression1': { current: 0, target: 0 },
+            'ParamEyeExpression2': { current: 0, target: 0 }
+        };
 
         (async function () {
             const loadingDiv = document.getElementById('loading');
+            const canvasElement = document.getElementById('canvas');
+            const uiWrapper = document.getElementById('ui-wrapper');
 
             // 1. Initialize Pixi Application
             app = new PIXI.Application({
-                view: document.getElementById('canvas'),
+                view: canvasElement,
                 autoStart: true,
                 resizeTo: window,
                 backgroundAlpha: 0,
-                antialias: true
+                antialias: true,
+                resolution: window.devicePixelRatio || 1
             });
+
+            app.stage.interactive = true;
+            app.stage.hitArea = new PIXI.Rectangle(0, 0, window.innerWidth, window.innerHeight);
 
             // 2. Load Function
             async function loadModel() {
-                
                 loadingDiv.innerText = `Loading Iris...`;
 
-                // Load Model
                 try {
                     currentModel = await Live2DModel.from(MODEL_URL);
                 } catch (error) {
@@ -116,59 +276,162 @@
                     return;
                 }
 
-                // Setup Model
                 app.stage.addChild(currentModel);
                 
-                // Scale & Position
-                const scaleX = (window.innerWidth * 0.4) / currentModel.width;
-                const scaleY = (window.innerHeight * 0.8) / currentModel.height;
+                const isMobile = window.innerWidth < 768;
+                const targetWidth = isMobile ? window.innerWidth * 0.8 : window.innerWidth * 0.4;
+                const targetHeight = isMobile ? window.innerHeight * 0.6 : window.innerHeight * 0.8;
+                
+                const scaleX = targetWidth / currentModel.width;
+                const scaleY = targetHeight / currentModel.height;
                 const scale = Math.min(scaleX, scaleY);
+                
                 currentModel.scale.set(scale);
                 currentModel.x = window.innerWidth / 2;
                 currentModel.y = window.innerHeight / 2;
                 currentModel.anchor.set(0.5, 0.5);
 
-                // Interaction
+                // Setup Features
                 currentModel.interactive = true;
                 currentModel.buttonMode = true;
                 setupDragging(currentModel);
+                setupCoreLoop(currentModel); // Handles both blinking and expressions
+                setupPointerTracking(currentModel);
+                setupUI();
 
                 loadingDiv.style.opacity = 0;
+                uiWrapper.style.opacity = 1;
+            }
+
+            // --- UI BUTTON SETUP ---
+            function setupUI() {
+                const menuBtn = document.getElementById('menu-btn');
+                const expressionPanel = document.getElementById('expression-panel');
+                
+                // Toggle Menu
+                menuBtn.addEventListener('click', () => {
+                    expressionPanel.classList.toggle('open');
+                });
+
+                // Close menu when clicking on the model/background stage
+                app.stage.on('pointerdown', () => {
+                    expressionPanel.classList.remove('open');
+                });
+
+                const buttons = document.querySelectorAll('.expr-btn');
+                buttons.forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        const paramId = e.target.getAttribute('data-param');
+                        
+                        // Toggle active class visually
+                        e.target.classList.toggle('active');
+                        
+                        // Toggle target value between 0 and 1
+                        if (expressionState[paramId]) {
+                            expressionState[paramId].target = e.target.classList.contains('active') ? 1 : 0;
+                        }
+                    });
+                });
+            }
+
+            // --- CORE LOOP (Blinking + Smooth Expressions) ---
+            function setupCoreLoop(model) {
+                let nextBlinkTime = Date.now() + 2000;
+                let isBlinking = false;
+                let eyeOpenness = 1;
+                let blinkPhase = 'closing'; 
+
+                app.ticker.add(() => {
+                    if (!model.internalModel || !model.internalModel.coreModel) return;
+
+                    const now = Date.now();
+                    const coreModel = model.internalModel.coreModel;
+
+                    // 1. Process Blinking
+                    if (!isBlinking && now > nextBlinkTime) {
+                        isBlinking = true;
+                        blinkPhase = 'closing';
+                    }
+
+                    if (isBlinking) {
+                        if (blinkPhase === 'closing') {
+                            eyeOpenness -= 0.15; 
+                            if (eyeOpenness <= 0) {
+                                eyeOpenness = 0;
+                                blinkPhase = 'opening';
+                            }
+                        } else if (blinkPhase === 'opening') {
+                            eyeOpenness += 0.10; 
+                            if (eyeOpenness >= 1) {
+                                eyeOpenness = 1;
+                                isBlinking = false;
+                                nextBlinkTime = now + Math.random() * 3500 + 2500; 
+                            }
+                        }
+                    }
+
+                    coreModel.setParameterValueById('ParamEyeLOpen', eyeOpenness);
+                    coreModel.setParameterValueById('ParamEyeROpen', eyeOpenness);
+
+                    // 2. Process Expressions (Smooth Transition)
+                    Object.keys(expressionState).forEach(paramId => {
+                        const state = expressionState[paramId];
+                        
+                        // Lerp (smooth move) from current to target
+                        state.current += (state.target - state.current) * 0.15; 
+                        
+                        // Apply parameter
+                        coreModel.setParameterValueById(paramId, state.current);
+                    });
+                    
+                }, undefined, PIXI.UPDATE_PRIORITY.LOW);
+            }
+
+            // --- POINTER TRACKING ---
+            function setupPointerTracking(model) {
+                app.stage.on('pointermove', (event) => {
+                    if (model && !model.dragging) {
+                        model.focus(event.data.global.x, event.data.global.y);
+                    }
+                });
             }
 
             // --- DRAGGING HELPER ---
             function setupDragging(model) {
                 model.on('pointerdown', (event) => {
                     model.dragging = true;
-                    model._dragData = event.data;
+                    model.dragPointerId = event.data.identifier; 
+                    
+                    const newPosition = event.data.getLocalPosition(model.parent);
                     model._dragOffset = {
-                        x: model.x - event.data.global.x,
-                        y: model.y - event.data.global.y
+                        x: model.x - newPosition.x,
+                        y: model.y - newPosition.y
                     };
                     model.alpha = 0.9;
                 });
 
-                model.on('pointerup', () => {
-                    model.dragging = false;
-                    model.alpha = 1;
-                });
+                const onDragEnd = (event) => {
+                    if (event.data.identifier === model.dragPointerId) {
+                        model.dragging = false;
+                        model.dragPointerId = null;
+                        model.alpha = 1;
+                    }
+                };
 
-                model.on('pointerupoutside', () => {
-                    model.dragging = false;
-                    model.alpha = 1;
-                });
+                model.on('pointerup', onDragEnd);
+                model.on('pointerupoutside', onDragEnd);
 
-                model.on('pointermove', () => {
-                    if (model.dragging) {
-                        const newPos = model._dragData.global;
-                        model.x = newPos.x + model._dragOffset.x;
-                        model.y = newPos.y + model._dragOffset.y;
+                model.on('pointermove', (event) => {
+                    if (model.dragging && event.data.identifier === model.dragPointerId) {
+                        const newPosition = event.data.getLocalPosition(model.parent);
+                        model.x = newPosition.x + model._dragOffset.x;
+                        model.y = newPosition.y + model._dragOffset.y;
                     }
                 });
             }
 
-            // Global Zoom
-            document.getElementById('canvas').addEventListener('wheel', (e) => {
+            // --- DESKTOP: Mouse Wheel Zoom ---
+            canvasElement.addEventListener('wheel', (e) => {
                 if (!currentModel) return;
                 e.preventDefault();
                 const zoomFactor = 0.001;
@@ -178,10 +441,59 @@
                 }
             }, { passive: false });
 
+            // --- MOBILE: Pinch-to-Zoom ---
+            let initialPinchDistance = null;
+            let initialScale = 1;
+
+            canvasElement.addEventListener('touchstart', (e) => {
+                // Ignore touch on UI elements
+                if(e.target.closest('#ui-wrapper')) return;
+
+                if (e.touches.length === 2) {
+                    e.preventDefault();
+                    initialPinchDistance = Math.hypot(
+                        e.touches[0].pageX - e.touches[1].pageX,
+                        e.touches[0].pageY - e.touches[1].pageY
+                    );
+                    if (currentModel) {
+                        initialScale = currentModel.scale.x;
+                    }
+                }
+            }, { passive: false });
+
+            canvasElement.addEventListener('touchmove', (e) => {
+                if (e.touches.length === 2 && currentModel && initialPinchDistance) {
+                    e.preventDefault(); 
+                    const currentDistance = Math.hypot(
+                        e.touches[0].pageX - e.touches[1].pageX,
+                        e.touches[0].pageY - e.touches[1].pageY
+                    );
+                    
+                    const pinchRatio = currentDistance / initialPinchDistance;
+                    let newScale = initialScale * pinchRatio;
+                    
+                    newScale = Math.max(0.01, Math.min(newScale, 10));
+                    currentModel.scale.set(newScale);
+                }
+            }, { passive: false });
+
+            canvasElement.addEventListener('touchend', (e) => {
+                if (e.touches.length < 2) {
+                    initialPinchDistance = null;
+                }
+            });
+
+            // --- Window Resize Handling ---
             window.addEventListener('resize', () => {
                 if (!currentModel) return;
                 app.renderer.resize(window.innerWidth, window.innerHeight);
-                if (currentModel.x > window.innerWidth || currentModel.y > window.innerHeight) {
+                
+                app.stage.hitArea = new PIXI.Rectangle(0, 0, window.innerWidth, window.innerHeight);
+                
+                if (currentModel.x > window.innerWidth + currentModel.width || 
+                    currentModel.y > window.innerHeight + currentModel.height ||
+                    currentModel.x < -currentModel.width || 
+                    currentModel.y < -currentModel.height) {
                     currentModel.x = window.innerWidth / 2;
                     currentModel.y = window.innerHeight / 2;
                 }
@@ -194,3 +506,6 @@
     </script>
 </body>
 </html>
+
+
+
